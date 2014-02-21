@@ -1,0 +1,23 @@
+# BigWig example
+
+```{r}
+library(RUnit); set.seed(123L)
+library(GenomicFileViews)
+fls <- dir("~/benchmark/GenomicFileViews", "*bigWig", full=TRUE)
+exp <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
+         "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep2.bigWig", 
+         "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep1.bigWig", 
+         "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep2.bigWig")
+if (!identical(exp, basename(fls)))
+    stop("expected files:\n  ", paste(exp, collapse="\n  "),
+         "\nat: ~/benchmark/GenomicFileViews/")
+    
+seqinfo <- seqinfo(BigWigFile(fls[1]))
+rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
+                  cut.last.tile.in.chrom=TRUE)
+bwv <- BigWigFileViews(fls, fileRange=rng)
+
+register(MulticoreParam())
+x <- summary(bwv[1:8,], mean)
+assay(x)
+```

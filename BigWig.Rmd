@@ -1,7 +1,6 @@
 # BigWig example
 
 ```{r}
-library(RUnit); set.seed(123L)
 library(GenomicFiles)
 fls <- list.files("data", "*bigWig", full=TRUE)
 exp <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
@@ -10,13 +9,64 @@ exp <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig",
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep2.bigWig")
 if (!identical(exp, basename(fls)))
     stop("expected files:\n  ", paste(exp, collapse="\n  "))
-    
+```
+
+### Parallelization using BiocParallel
+
+```{r}
+register(SerialParam())
+```
+
+### Object construction is lightweight
+
+```{r}
 seqinfo <- seqinfo(BigWigFile(fls[1]))
 rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
                   cut.last.tile.in.chrom=TRUE)
 bwv <- BigWigFileViews(fls, fileRange=rng)
+print(object.size(bwv),units="Mb")
+```
 
-register(SerialParam())
+### How to reduce by range
+
+First build a 'map' function:
+
+```{r}
+MAP <- function(FILE, RANGE, ...) {
+  import(FILE, selection=RANGE, as="NumericList")[[1]]
+}
+z <- MAP(fls[1], rng[1])
+class(z)
+length(z)
+summary(z)
+```
+
+Now build a reduce function:
+
+```{r}
+REDUCE <- function(MAPPED, ...) {
+  m <- simplify2array(MAPPED)
+  rs <- rowSums(m)
+  Rle(rs)
+}
+REDUCE(list(1:4,5:8,9:12))
+```
+
+```{r}
+res <- reduceByRange(bwv[1:8,], MAP, REDUCE)
+res[1:2]
+```
+
+### The built-in summary method
+
+```{r}
 x <- summary(bwv[1:8,])
 assay(x)
+```
+
+### The built-in coverage method
+
+```{r}
+x <- coverage(bwv[1:8,])
+assay(x)[1,1]
 ```

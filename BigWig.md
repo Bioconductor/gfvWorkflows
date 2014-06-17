@@ -1,32 +1,122 @@
-# BigWig example
+# BigWigFileViews
+
+Access and analyze data from a number of **BigWig** files using the **GenomicFiles** package.
+
+A **BigWig** file is a compressed binary indexed file which contains read
+coverage information along the genome. The coverage information is
+stored at different resolutions to optimize the speed at which
+coverage can be visualized. The paper describing the format can be
+found here:
+
+http://bioinformatics.oxfordjournals.org/content/26/17/2204.long
+
+We start by loading the **GenomicFiles** library, and referencing four
+files stored in a directory `data`. These are BigWig files storing the
+coverage of four RNA-Seq experiments from the ENCODE project. The
+files can be downloaded from:
+
+ftp://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeCshlLongRnaSeq/
 
 
 ```r
 library(GenomicFiles)
 fls <- list.files("data", "*bigWig", full=TRUE)
-exp <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
+expect <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep2.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep1.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep2.bigWig")
-if (!identical(exp, basename(fls)))
-    stop("expected files:\n  ", paste(exp, collapse="\n  "))
+if (!identical(expect, basename(fls)))
+    stop("expected files:\n  ", paste(expect, collapse="\n  "))
 ```
 
 ### Parallelization using BiocParallel
+
+The **GenomicFiles** package internally uses **BiocParallel** to allow
+parallelization across either *files* or *ranges*. Here, we will just
+register a serial back-end. For other settings, see `?register`.
 
 
 ```r
 register(SerialParam())
 ```
 
-### Object construction is lightweight
+### Object construction
+
+We query the first **BigWigFile** for the information about the different
+sequences (chromosomes). The functions for querying and importing data
+from BigWig files are in the **rtracklayer** Bioconductor package.
 
 
 ```r
-seqinfo <- seqinfo(BigWigFile(fls[1]))
-rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
-                  cut.last.tile.in.chrom=TRUE)
-bwv <- BigWigFileViews(fls, fileRange=rng)
+( seqinfo <- seqinfo(BigWigFile(fls[1])) )
+```
+
+```
+## Seqinfo of length 25
+## seqnames seqlengths isCircular genome
+## chr1      249250621       <NA>   <NA>
+## chr10     135534747       <NA>   <NA>
+## chr11     135006516       <NA>   <NA>
+## chr12     133851895       <NA>   <NA>
+## chr13     115169878       <NA>   <NA>
+## ...             ...        ...    ...
+## chr8      146364022       <NA>   <NA>
+## chr9      141213431       <NA>   <NA>
+## chrM          16571       <NA>   <NA>
+## chrX      155270560       <NA>   <NA>
+## chrY       59373566       <NA>   <NA>
+```
+
+We can then use the `tileGenome` function from the **GenomicRanges**
+package to tile the genome with 100 kb ranges.
+
+
+```r
+( rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
+                  cut.last.tile.in.chrom=TRUE) )
+```
+
+```
+## GRanges with 30971 ranges and 0 metadata columns:
+##           seqnames               ranges strand
+##              <Rle>            <IRanges>  <Rle>
+##       [1]     chr1     [     1, 100000]      *
+##       [2]     chr1     [100001, 200000]      *
+##       [3]     chr1     [200001, 300000]      *
+##       [4]     chr1     [300001, 400000]      *
+##       [5]     chr1     [400001, 500000]      *
+##       ...      ...                  ...    ...
+##   [30967]     chrY [58900001, 59000000]      *
+##   [30968]     chrY [59000001, 59100000]      *
+##   [30969]     chrY [59100001, 59200000]      *
+##   [30970]     chrY [59200001, 59300000]      *
+##   [30971]     chrY [59300001, 59373566]      *
+##   ---
+##   seqlengths:
+##         chr1     chr10     chr11 ...      chrM      chrX      chrY
+##    249250621 135534747 135006516 ...     16571 155270560  59373566
+```
+
+Now we are ready to construct a **BigWigFileViews**. This object will
+have *columns* which are the files specified by `fileList` and
+*rows* which are the ranges specified by `fileRange`.
+
+
+```r
+( bwv <- BigWigFileViews(fileList=fls, fileRange=rng) ) 
+```
+
+```
+## BigWigFileViews dim: 30971 ranges x 4 samples 
+## names: wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep2.bigWig wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep1.bigWig wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep2.bigWig 
+## detail: use fileList(), fileSample(), fileRange(), ...
+```
+
+Note that the object is lightweight; we simply store the ranges and a
+pointer to the files stored on disk.
+
+
+```r
 print(object.size(bwv),units="Mb")
 ```
 

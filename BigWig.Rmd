@@ -1,29 +1,73 @@
-# BigWig example
+# BigWigFileViews
+
+Access and analyze data from a number of **BigWig** files using the **GenomicFiles** package.
+
+A **BigWig** file is a compressed binary indexed file which contains read
+coverage information along the genome. The coverage information is
+stored at different resolutions to optimize the speed at which
+coverage can be visualized. The paper describing the format can be
+found here:
+
+http://bioinformatics.oxfordjournals.org/content/26/17/2204.long
+
+We start by loading the **GenomicFiles** library, and referencing four
+files stored in a directory `data`. These are BigWig files storing the
+coverage of four RNA-Seq experiments from the ENCODE project. The
+files can be downloaded from:
+
+ftp://hgdownload.cse.ucsc.edu/goldenPath/hg19/encodeDCC/wgEncodeCshlLongRnaSeq/
 
 ```{r}
 library(GenomicFiles)
 fls <- list.files("data", "*bigWig", full=TRUE)
-exp <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
+expect <- c("wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep1.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaMinusRawSigRep2.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep1.bigWig", 
          "wgEncodeCshlLongRnaSeqA549CellLongnonpolyaPlusRawSigRep2.bigWig")
-if (!identical(exp, basename(fls)))
-    stop("expected files:\n  ", paste(exp, collapse="\n  "))
+if (!identical(expect, basename(fls)))
+    stop("expected files:\n  ", paste(expect, collapse="\n  "))
 ```
 
 ### Parallelization using BiocParallel
+
+The **GenomicFiles** package internally uses **BiocParallel** to allow
+parallelization across either *files* or *ranges*. Here, we will just
+register a serial back-end. For other settings, see `?register`.
 
 ```{r}
 register(SerialParam())
 ```
 
-### Object construction is lightweight
+### Object construction
+
+We query the first **BigWigFile** for the information about the different
+sequences (chromosomes). The functions for querying and importing data
+from BigWig files are in the **rtracklayer** Bioconductor package.
 
 ```{r}
-seqinfo <- seqinfo(BigWigFile(fls[1]))
-rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
-                  cut.last.tile.in.chrom=TRUE)
-bwv <- BigWigFileViews(fls, fileRange=rng)
+( seqinfo <- seqinfo(BigWigFile(fls[1])) )
+```
+
+We can then use the `tileGenome` function from the **GenomicRanges**
+package to tile the genome with 100 kb ranges.
+
+```{r}
+( rng <- tileGenome(seqlengths(BigWigFile(fls[1])), tilewidth=1e5,
+                  cut.last.tile.in.chrom=TRUE) )
+```
+
+Now we are ready to construct a **BigWigFileViews**. This object will
+have *columns* which are the files specified by `fileList` and
+*rows* which are the ranges specified by `fileRange`.
+
+```{r}
+( bwv <- BigWigFileViews(fileList=fls, fileRange=rng) ) 
+```
+
+Note that the object is lightweight; we simply store the ranges and a
+pointer to the files stored on disk.
+
+```{r}
 print(object.size(bwv),units="Mb")
 ```
 
